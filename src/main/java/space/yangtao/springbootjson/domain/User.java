@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import org.springframework.format.annotation.DateTimeFormat;
 import space.yangtao.springbootjson.GenderDeserializer;
+import space.yangtao.springbootjson.config.Views;
 import space.yangtao.springbootjson.serializer.PhoneNumberSerializer;
 
 import java.math.BigDecimal;
@@ -63,11 +64,19 @@ public class User {
     private String password;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING)
+    @JsonView(Views.Internal.class)
     private boolean active;
 
     @JsonSerialize(using = PhoneNumberSerializer.class)
     private String phoneNumber;
 
+    @JsonView(Views.Public.class)
+    public String publicField;
+
+    @JsonView(Views.Internal.class)
+    public String internalField;
+
+    public EncryptedPhone phone;
 
     @JsonProperty("name")
     public String getName() {

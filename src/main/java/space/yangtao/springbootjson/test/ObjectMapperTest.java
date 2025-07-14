@@ -8,9 +8,12 @@ import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.Test;
-import space.yangtao.springbootjson.domain.User;
+import space.yangtao.springbootjson.config.EncryptedPhoneModifier;
+import space.yangtao.springbootjson.config.Views;
+import space.yangtao.springbootjson.domain.*;
 
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
@@ -66,6 +69,11 @@ public class ObjectMapperTest {
         // 设置序列化时忽略null值（默认是序列化null值）
         mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
+        // 加密手机模块
+        SimpleModule simpleModule = new SimpleModule();
+        simpleModule.setSerializerModifier(new EncryptedPhoneModifier());
+        mapper.registerModule(simpleModule);
+
         return mapper;
     }
 
@@ -102,7 +110,7 @@ public class ObjectMapperTest {
                 .setCreateTime(LocalDateTime.now())
                 .setUnsafeAmount(new BigDecimal("123456789012345678905555555555.123456"))
                 .setSafeAmount(new BigDecimal("123456789012345678905555555555.123456"))
-                .setChars(new char[] {'a', 'b', 'c'})
+                .setChars(new char[]{'a', 'b', 'c'})
                 .setGender(User.Gender.MALE);
         String s = mapper.writeValueAsString(user);
         System.out.println(s);
@@ -138,7 +146,8 @@ public class ObjectMapperTest {
                 "    \"name\" : \"user001\"\n" +
                 "  } ]\n" +
                 "}";
-        Map<String, List<User>> map2 = mapper.readValue(json, new TypeReference<Map<String, List<User>>>() {});
+        Map<String, List<User>> map2 = mapper.readValue(json, new TypeReference<Map<String, List<User>>>() {
+        });
         System.out.println(map2);
     }
 
@@ -205,6 +214,73 @@ public class ObjectMapperTest {
         System.out.println(user);
     }
 
+    @Test
+    public void test10() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+        String json = "{\"type\":\"dog\",\"name\":\"旺财\",\"boneCount\":5}";
+        Animal animal = mapper.readValue(json, Animal.class);
+        System.out.println(animal instanceof Animal.Dog);  // true
+    }
 
+    @Test
+    public void test11() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+        User user = new User().setPublicField("p").setInternalField("i");
+        String json = mapper.writerWithView(Views.Public.class)
+                .writeValueAsString(user);
+        System.out.println(json);
+    }
+
+    @Test
+    public void test12() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+        String json = "{\"id\":1,\"name\":\"张三\"}";
+        Student student = mapper.readValue(json, Student.class);
+        System.out.println(student);
+    }
+
+    @Test
+    public void test13() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+        String json = "{\"id\":1,\"name\":\"张三\",\"age\":18}";
+        DynamicUser dynamicUser = mapper.readValue(json, DynamicUser.class);
+        System.out.println(dynamicUser);
+    }
+
+    @Test
+    public void test14() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+
+        Config cfg = new Config();
+        cfg.setName("系统配置");
+        cfg.getSettings().put("threadPool", 10);
+        cfg.getSettings().put("timeout", 5000);
+
+        System.out.println(mapper.writeValueAsString(cfg));
+
+    }
+
+    @Test
+    public void test15() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+
+        mapper.addMixIn(OnlyReadClass.class, OnlyReadClassMixIn.class);
+        OnlyReadClass onlyReadClass = new OnlyReadClass().setId(1L).setName("只读类");
+        String json = mapper.writeValueAsString(onlyReadClass);
+        System.out.println(json);
+
+        String fromJson = "{\"or_id\":1,\"or_name\":\"只读类\"}";
+        OnlyReadClass orClass = mapper.readValue(fromJson, OnlyReadClass.class);
+        System.out.println(orClass);
+
+    }
+
+    @Test
+    public void test16() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+
+        User user = new User().setPhone(new EncryptedPhone("13545678901"));
+        System.out.println(mapper.writeValueAsString(user));
+    }
 
 }
