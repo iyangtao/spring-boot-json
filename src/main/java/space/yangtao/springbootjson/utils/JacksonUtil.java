@@ -1,61 +1,183 @@
 package space.yangtao.springbootjson.utils;
 
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.ObjectReader;
 
-import java.io.IOException;
+import lombok.SneakyThrows;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.lang.NonNull;
+
+import java.util.List;
 
 /**
+ * Jackson工具类
+ *
  * @author yangtao
  * @since 2025/7/21 16:37
  */
-@Slf4j
-public class JacksonUtil {
+public final class JacksonUtil {
+
+    private static volatile ObjectMapper mapper;
+
+    private JacksonUtil() {
+    }
+
+    /*==================  Spring 注入 mapper  ==================*/
 
     /**
-     * 获取 ObjectMapper 实例
+     * 通过 Spring 自动注入全局 ObjectMapper 并填充静态变量
+     * 只在启动阶段执行一次，保证线程安全
      */
-    public static ObjectMapper getObjectMapper() {
-        return SpringUtil.getBean(ObjectMapper.class);
-    }
+    @Configuration(proxyBeanMethods = false)
+    static class JacksonUtilInitializer implements InitializingBean {
+        private final ObjectMapper injectedMapper;
 
-    @SneakyThrows
-    public static String toJsonString(Object object) {
-        ObjectMapper objectMapper = getObjectMapper();
-        return objectMapper.writeValueAsString(object);
-    }
-
-    @SneakyThrows
-    public static byte[] toJsonByte(Object object) {
-        ObjectMapper objectMapper = getObjectMapper();
-        return objectMapper.writeValueAsBytes(object);
-    }
-
-    @SneakyThrows
-    public static String toJsonPrettyString(Object object) {
-        ObjectMapper objectMapper = getObjectMapper();
-        return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(object);
-    }
-
-    public JsonNode parseObject(String text) {
-
-    }
-
-    public static <T> T parseObject(String text, Class<T> clazz) {
-        if (StrUtil.isEmpty(text)) {
-            return null;
+        /**
+         * 构造注入；@Lazy防止循环依赖
+         */
+        JacksonUtilInitializer(@Lazy ObjectMapper injectedMapper) {
+            this.injectedMapper = injectedMapper;
         }
-        try {
-            ObjectMapper objectMapper = getObjectMapper();
-            return objectMapper.readValue(text, clazz);
-        } catch (IOException e) {
-            log.error("json parse err, json: {}", text, e);
-            throw new RuntimeException(e);
+
+        @Override
+        public void afterPropertiesSet() {
+            JacksonUtil.mapper = this.injectedMapper;
         }
+    }
+
+    /**
+     * 获取ObjectMapper实例
+     */
+    public static ObjectMapper getMapper() {
+        if (mapper == null) {
+            synchronized (JacksonUtil.class) {
+                if (mapper == null) {
+                    mapper = SpringUtil.getBean(ObjectMapper.class);
+                }
+            }
+        }
+        return mapper;
+    }
+
+    /*==================  核心序列化  ==================*/
+
+    /**
+     * 对象 → JSON字符串（紧凑）
+     */
+    @SneakyThrows
+    public static String toJsonString(@NonNull Object obj) {
+        return getMapper().writeValueAsString(obj);
+    }
+
+    /**
+     * 对象 → JSON 字符串（美化）
+     */
+    @SneakyThrows
+    public static String toPrettyJsonString(@NonNull Object obj) {
+        return getMapper().writerWithDefaultPrettyPrinter().writeValueAsString(obj);
+    }
+
+    /**
+     * 对象 → UTF-8字节数组
+     */
+    @SneakyThrows
+    public static byte[] toJsonBytes(@NonNull Object obj) {
+        return getMapper().writeValueAsBytes(obj);
+    }
+
+    /*==================  核心反序列化  ==================*/
+
+    /**
+     * JSON → 对象（简单类型）
+     */
+    @SneakyThrows
+    public static <T> T parseObject(@NonNull String json, @NonNull Class<T> clazz) {
+        return getMapper().readValue(json, clazz);
+    }
+
+    /**
+     * JSON → 列表
+     */
+    @SneakyThrows
+    public static <T> List<T> parseArray(@NonNull String json, @NonNull Class<T> clazz) {
+        return getMapper().readValue(json, getMapper().getTypeFactory().constructCollectionType(List.class, clazz));
+    }
+
+    /**
+     * JSON → 对象（支持泛型TypeReference）
+     */
+    @SneakyThrows
+    public static <T> T parseObject(@NonNull String json, @NonNull TypeReference<T> typeRef) {
+        return getMapper().readValue(json, typeRef);
+    }
+
+    /**
+     * 字节数组 → 对象
+     */
+    @SneakyThrows
+    public static <T> T parseBytes(@NonNull byte[] bytes, @NonNull Class<T> clazz) {
+        return getMapper().readValue(bytes, clazz);
+    }
+
+    /**
+     * 字节数组 → 列表
+     */
+    @SneakyThrows
+    public static <T> List<T> parseBytesToList(@NonNull byte[] bytes, @NonNull Class<T> clazz) {
+        return getMapper().readValue(bytes, getMapper().getTypeFactory().constructCollectionType(List.class, clazz));
+    }
+
+    /**
+     * 字节数组 → 对象（支持泛型TypeReference）
+     */
+    @SneakyThrows
+    public static <T> T parseBytes(@NonNull byte[] bytes, @NonNull TypeReference<T> typeRef) {
+        return getMapper().readValue(bytes, typeRef);
+    }
+
+    /*==================  进阶功能  ==================*/
+
+    /**
+     * 对象深克隆
+     */
+    public static <T> T clone(@NonNull T src, @NonNull Class<T> clazz) {
+        return parseObject(toJsonString(src), clazz);
+    }
+
+    /**
+     * 将对象转为指定类型的对象
+     */
+    public static <T> T convert(@NonNull Object source, @NonNull Class<T> targetType) {
+        return getMapper().convertValue(source, targetType);
+    }
+
+    /**
+     * 将列表转换为指定类型的列表
+     */
+    public static <T> List<T> convertList(@NonNull List<?> source, @NonNull Class<T> targetType) {
+        return getMapper().convertValue(source, getMapper().getTypeFactory().constructCollectionType(List.class, targetType));
+    }
+
+    /**
+     * 将JSON字符串增量更新到指定对象
+     */
+    @SneakyThrows
+    public static <T> T update(@NonNull String jsonPatch, @NonNull T target) {
+        ObjectReader updater = getMapper().readerForUpdating(target);
+        return updater.readValue(jsonPatch);
+    }
+
+    /**
+     * 解析为树模型
+     */
+    @SneakyThrows
+    public static JsonNode parseTree(@NonNull String json) {
+        return getMapper().readTree(json);
     }
 
 }

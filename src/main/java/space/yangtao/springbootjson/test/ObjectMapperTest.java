@@ -1,21 +1,27 @@
 package space.yangtao.springbootjson.test;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.*;
+import com.fasterxml.jackson.core.json.async.NonBlockingJsonParser;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.MapperFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.ser.impl.SimpleBeanPropertyFilter;
+import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.Test;
 import space.yangtao.springbootjson.config.EncryptedPhoneModifier;
 import space.yangtao.springbootjson.config.Views;
 import space.yangtao.springbootjson.domain.*;
 
+import java.io.IOException;
+import java.io.StringWriter;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -281,6 +287,223 @@ public class ObjectMapperTest {
 
         User user = new User().setPhone(new EncryptedPhone("13545678901"));
         System.out.println(mapper.writeValueAsString(user));
+    }
+
+    @Test
+    public void test17() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+
+        SimpleBeanPropertyFilter filter = SimpleBeanPropertyFilter.filterOutAllExcept("publicField");
+        SimpleFilterProvider userFilter = new SimpleFilterProvider().addFilter("userFilter", filter);
+        User user = new User().setPublicField("p").setInternalField("i");
+        String json = mapper.writer(userFilter).writeValueAsString(user);
+        System.out.println(json);
+    }
+
+    @Test
+    public void test18() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+
+        Parent parent = new Parent();
+        Child child = new Child();
+        parent.setName("p");
+        parent.setChild(child);
+        child.setName("c");
+        child.setParent(parent);
+
+        System.out.println(mapper.writeValueAsString(parent));
+        System.out.println(mapper.writeValueAsString(child));
+    }
+
+    @Test
+    public void test19() throws JsonProcessingException {
+        Person a = new Person().setId(1L).setName("A");
+        Person b = new Person().setId(2L).setName("B");
+        a.setFriends(Collections.singletonList(b));
+        b.setFriends(Collections.singletonList(a));
+
+        ObjectMapper mapper = getCommonObjectMapper();
+        System.out.println(mapper.writeValueAsString(a));
+        System.out.println(mapper.writeValueAsString(b));
+    }
+
+    @Test
+    public void test20() throws IOException {
+        String json = "{\"id\":1,\"name\":\"张三\"}";
+
+        JsonFactory factory = new JsonFactory();
+        JsonParser parser = factory.createParser(json);
+
+        while (!parser.isClosed()) {
+            JsonToken token = parser.nextToken();
+
+            if (JsonToken.FIELD_NAME.equals(token)) {
+                String fieldName = parser.getCurrentName();
+                parser.nextToken(); // 移动到值
+                String value = parser.getText();
+
+                System.out.println(fieldName + " = " + value);
+            }
+        }
+
+    }
+
+    @Test
+    public void test21() throws IOException {
+        StringWriter writer = new StringWriter();
+        JsonGenerator gen = new JsonFactory().createGenerator(writer);
+
+        gen.writeStartObject();
+        gen.writeNumberField("id", 1);
+        gen.writeStringField("name", "李四");
+        gen.writeEndObject();
+        gen.close();
+
+        System.out.println(writer);
+
+    }
+
+    @Test
+    public void test22() throws IOException {
+        byte[] jsonBytes = "{\"id\":1,\"name\":\"Leo\"}".getBytes(StandardCharsets.UTF_8);
+
+        JsonFactory factory = new JsonFactory();
+        NonBlockingJsonParser parser = (NonBlockingJsonParser) factory.createNonBlockingByteArrayParser();
+
+        // 一次性喂数据
+        parser.feedInput(jsonBytes, 0, jsonBytes.length);
+        parser.endOfInput(); // 告诉解析器数据喂完了
+
+        JsonToken token;
+        while ((token = parser.nextToken()) != null && token != JsonToken.NOT_AVAILABLE) {
+            if (token == JsonToken.FIELD_NAME) {
+                String field = parser.getCurrentName();
+                parser.nextToken(); // 获取字段值
+                String value = parser.getText();
+                System.out.println(field + " = " + value);
+            }
+        }
+
+    }
+
+    @Test
+    public void test23() throws JsonProcessingException {
+        String json = "{\"id\":1,\"name\":\"张三\",\"tags\":[\"a\",\"b\"]}";
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(json);
+
+        int id = root.get("id").asInt();            // 1
+        String name = root.get("name").asText();    // 张三
+        JsonNode tags = root.get("tags");           // ArrayNode
+
+        for (JsonNode tagNode : tags) {
+            System.out.println(tagNode.asText());  // a, b
+        }
+
+        String nickname = root.path("nickname").asText("默认昵称");  // 不存在时返回默认值
+
+    }
+
+    @Test
+    public void test24() {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode obj = mapper.createObjectNode();
+
+        obj.put("id", 100);
+        obj.put("name", "Leo");
+
+        ArrayNode array = mapper.createArrayNode();
+        array.add("x").add("y");
+
+        obj.set("tags", array);
+
+        System.out.println(obj.toPrettyString());
+
+    }
+
+    @Test
+    public void test25() {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode root = mapper.createObjectNode();
+
+        // 添加字段
+        root.put("gender", "male");
+
+        // 修改字段
+        root.put("name", "李四");
+
+        // 删除字段
+        root.remove("tags");
+
+        // 嵌套修改
+        ((ArrayNode) root.withArray("tags")).add("c");
+
+    }
+
+    @Test
+    public void test26_1() {
+        ObjectMapper mapper = new ObjectMapper();
+        ArrayNode root = mapper.createArrayNode();
+
+        // 添加元素
+        root.add("apple");
+        root.add("banana");
+
+        // 修改元素
+        root.set(1, "orange");
+
+        // 删除元素
+        root.remove(0);
+
+    }
+
+    @Test
+    public void test26() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+
+
+        String json = "{}";
+        JsonNode jsonNode = mapper.readTree(json);
+        User user = mapper.treeToValue(jsonNode, User.class);
+        System.out.println(user);
+
+
+    }
+
+    @Test
+    public void test27() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+        String json = "[]";
+        JsonNode jsonNode = mapper.readTree(json);
+        List<User> users = mapper.convertValue(jsonNode, new TypeReference<List<User>>() {});
+        System.out.println(users);
+    }
+
+    @Test
+    public void test28() {
+        // Java对象 -> JsonNode
+        ObjectMapper mapper = new ObjectMapper();
+        User user = new User();
+        JsonNode jsonNode = mapper.valueToTree(user);
+
+        ObjectNode objectNode = mapper.valueToTree(user);
+        ArrayNode arrayNode = mapper.valueToTree(user);
+    }
+
+    @Test
+    public void test29() {
+        // jsonNode的输出
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode objectNode = mapper.createObjectNode();
+        objectNode.put("id", 1);
+        objectNode.put("name", "张三");
+        // 普通输出
+        String json = objectNode.toString();
+        System.out.println(json);  // {"id":1,"name":"张三"}
+        // 美化输出
+        String prettyJson = objectNode.toPrettyString();
+        System.out.println(prettyJson);  //
     }
 
 }
