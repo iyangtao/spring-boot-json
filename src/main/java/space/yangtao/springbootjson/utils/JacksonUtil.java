@@ -12,7 +12,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.lang.NonNull;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Jackson工具类
@@ -157,10 +159,29 @@ public final class JacksonUtil {
     }
 
     /**
+     * 将对象转换为指定类型（支持泛型TypeReference）
+     */
+    public static <T> T convert(@NonNull Object source, @NonNull TypeReference<T> typeRef) {
+        return getMapper().convertValue(source, typeRef);
+    }
+
+    /**
      * 将列表转换为指定类型的列表
      */
     public static <T> List<T> convertList(@NonNull List<?> source, @NonNull Class<T> targetType) {
         return getMapper().convertValue(source, getMapper().getTypeFactory().constructCollectionType(List.class, targetType));
+    }
+
+    /**
+     * 将列表转换为指定类型的列表（支持泛型TypeReference）
+     */
+    public static <T> List<T> convertList(@NonNull List<?> source, @NonNull TypeReference<T> typeRef) {
+        if (source.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return source.stream()
+                 .map(item -> getMapper().convertValue(item, typeRef))
+                 .collect(Collectors.toList());
     }
 
     /**
