@@ -506,4 +506,18 @@ public class ObjectMapperTest {
         System.out.println(prettyJson);  //
     }
 
+    @Test
+    public void test30() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+        String s = mapper.writeValueAsString(null);
+        System.out.println(s == null);
+        System.out.println("null".equals(s));
+    }
+
+    @Test
+    public void test31() throws JsonProcessingException {
+        ObjectMapper mapper = getCommonObjectMapper();
+        System.out.println(Arrays.toString(mapper.writeValueAsBytes(null)));
+    }
+
 }
