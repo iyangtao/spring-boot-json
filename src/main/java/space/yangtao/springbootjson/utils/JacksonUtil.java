@@ -311,21 +311,40 @@ public final class JacksonUtil {
     /*==================  进阶功能  ==================*/
 
     /**
-     * 对象深克隆
+     * 对象深克隆（简单类型）
      */
-    public static <T> T clone(T src, Class<T> clazz) {
-        return executeWithDefault(() -> cloneOrThrow(src, clazz), null);
+    public static <T> T clone(Object source, Class<T> clazz) {
+        return executeWithDefault(() -> cloneOrThrow(source, clazz), null);
     }
 
     /**
-     * 对象深克隆，如果失败则抛出异常
+     * 对象深克隆（简单类型），如果失败则抛出异常
      */
-    public static <T> T cloneOrThrow(T src, Class<T> clazz) {
+    public static <T> T cloneOrThrow(Object source, Class<T> clazz) {
         try {
-            return parseObjectOrThrow(toJsonString(src), clazz);
+            return parseObjectOrThrow(toJsonString(source), clazz);
         } catch (Exception e) {
-            log.error("对象深克隆失败，src = {}", src, e);
-            throw new JacksonException("对象深克隆失败", e);
+            log.error("对象深克隆（简单类型）失败，source = {}", source, e);
+            throw new JacksonException("对象深克隆（简单类型）失败", e);
+        }
+    }
+
+    /**
+     * 对象深克隆（泛型TypeReference）
+     */
+    public static <T> T clone(Object source, TypeReference<T> typeRef) {
+        return executeWithDefault(() -> cloneOrThrow(source, typeRef), null);
+    }
+
+    /**
+     * 对象深克隆（泛型TypeReference），如果失败则抛出异常
+     */
+    public static <T> T cloneOrThrow(Object source, TypeReference<T> typeRef) {
+        try {
+            return parseObjectOrThrow(toJsonString(source), typeRef);
+        } catch (Exception e) {
+            log.error("对象深克隆（泛型TypeReference）失败，source = {}", source, e);
+            throw new JacksonException("对象深克隆（泛型TypeReference）失败", e);
         }
     }
 
